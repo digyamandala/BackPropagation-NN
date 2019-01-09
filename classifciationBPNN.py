@@ -4,16 +4,18 @@ import csv
 import random
 from sklearn.decomposition import PCA
 #Global Variable
-listLabel = ['a', 'b', 'c', 'd', 'e']
+
 n_input = 5
 n_output = 5
-n_hidden = [10,15,20,15,10]
-n_epoch = 100
-learningRate = 0.7
+n_hidden = [10,8]
+n_epoch = 5000
+learningRate = 0.76
 modelResultValue = []
 defaultResultValue = []
 minFeature = []
 maxFeature = []
+save_dir = "./bpnn-model/" #. untuk cek kalo gaada folder tersebut maka akan dibikinin
+filename = "bpnn.ckpt"
 
 x = tf.placeholder(tf.float32, [None,n_input])
 t = tf.placeholder(tf.float32, [None,n_output])
@@ -107,26 +109,33 @@ def fullyConnected(input, n_input, n_output):
     return activationFunction
 
 def buildModel(input, n_input, n_hidden, n_output):
-    layer_1 = fullyConnected(input,n_input,n_hidden[0])
-    layer_2 = fullyConnected(layer_1, n_hidden[0], n_hidden[1])
-    layer_3 = fullyConnected(layer_2, n_hidden[1], n_hidden[2])
-    layer_4 = fullyConnected(layer_3, n_hidden[2], n_hidden[3])
-    layer_5 = fullyConnected(layer_4, n_hidden[3], n_hidden[4])
-    layer_6 = fullyConnected(layer_5, n_hidden[4], n_output)
-    return layer_6
+    x = fullyConnected(input,n_input,n_hidden[0])
+    if(len(n_hidden) == 1):
+        return fullyConnected(x, n_hidden[0], n_output)
 
-def optimize(model,trainDataset):
+    c = 0
+    for i in range(0, len(n_hidden)-1):
+        x = fullyConnected(x, n_hidden[i], n_hidden[i+1])
+        c = i
+    x = fullyConnected(x, n_hidden[c+1], n_output)
+    return x
+
+def optimize(model,trainDataset, validateDataset):
+    
     loss = tf.reduce_mean(0.5 * (t-model)**2)
     optimizer = tf.train.GradientDescentOptimizer(learningRate).minimize(loss)
-    correct_prediction = tf.equal(tf.argmax(model,1), tf.argmax(t,1))
-    accuracy= tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    # correct_prediction = tf.equal(tf.argmax(model,1), tf.argmax(t,1))
     modelResult = tf.argmax(model,1)
     defaultResult = tf.argmax(t,1)
+    correct_prediction = tf.equal(modelResult, defaultResult)
+    accuracy= tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    valerrbefore = 100000000
     global modelResultValue
     global defaultResultValue
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
+        saver = tf.train.Saver(tf.global_variables())
         for epoch in range(n_epoch + 1):
             features = [i[0] for i in trainDataset]
             labels = [i[1] for i in trainDataset]
@@ -138,15 +147,72 @@ def optimize(model,trainDataset):
             _, lossVal, accuracyVal, modelResultValue, defaultResultValue = sess.run([optimizer, loss, accuracy, modelResult, defaultResult], feed_dict)
             if(epoch % 100 == 0):
                 print(f"Epoch: {epoch} | Loss: {lossVal*100} | Accuracy: {accuracyVal*100} | modelResult: {modelResultValue} | defaultResult: {defaultResultValue}")
+            
+            if(epoch == 500):
+                print(f"\n====================================================================================================")
+                print(f"VALIDATION |Epoch: {epoch} | Loss: {validateErrVal*100} | Accuracy: {validateAccVal*100} | modelResult: {validateResultVal} | defaultResult: {defaultResultVal}")
+                print(f"====================================================================================================\n")
+
+            if(epoch % 500 == 0):
+                validateErrVal, validateAccVal, validateResultVal, defaultResultVal= sess.run([loss, accuracy, modelResult, defaultResult], feed_dict={
+                    x: [j[0] for j in validateDataset],
+                    t: [j[1] for j in validateDataset]
+                })
+                
+                if(validateErrVal < valerrbefore):
+                    saver.save(sess, save_dir + filename)
+                    valerrbefore = validateErrVal
+
+        # same = 0
+        # for i in range(0, len(modelResultValue)):
+        #     if(modelResultValue[i] == defaultResultValue[i]):
+        #         same = same + 1
+        # print(same, (same/len(modelResultValue)) * 100)
+
+def test(model, testDataset):
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(tf.global_variables())
+        checkPoint = tf.train.get_checkpoint_state(save_dir)
+        saver.restore(sess, checkPoint.model_checkpoint_path)
+
+        modelResult = tf.argmax(model,1)
+        defaultResult = tf.argmax(t,1)
+        correct_prediction = tf.equal(modelResult, defaultResult)
+        accuracy= tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        accuracyVal, modelResultValue, defaultResultValue = sess.run([accuracy, modelResult, defaultResult], feed_dict={
+            x: [i[0] for i in testDataset],
+            t: [i[1] for i in testDataset]
+        })
         
-
-        same = 0
-        for i in range(0, len(modelResultValue)):
+        y = 0
+        for i in range(0, len(testDataset)):
             if(modelResultValue[i] == defaultResultValue[i]):
-                same = same + 1
-        print(same, (same/len(modelResultValue)) * 100)
+                y = y + 1
+
+        print(f"Test result: {resultToAlphabetic(modelResultValue)}\nDefault result: {resultToAlphabetic(defaultResultValue)}")
+        print(f"Total test data: {len(testDataset)}")
+        print(f"Number of correct prediction: {y}")
+        print(f"Test accuracy: {round(accuracyVal*100,1)}%")
 
 
+def resultToAlphabetic(resultArr):
+    result = []
+    for i in range(0, len(resultArr)):
+        if(resultArr[i] == 0):
+            result.append('a')
+        elif(resultArr[i] == 1):
+            result.append('b')
+        elif(resultArr[i] == 2):
+            result.append('c')
+        elif(resultArr[i] == 3):
+            result.append('d')
+        elif(resultArr[i] == 4):
+            result.append('e')
+    
+    return np.array(result)
+            
 def mergeFeatureLabel(datasetFeature, datasetLabel):
     result = []
     for i in range(0, len(datasetFeature)):
@@ -164,6 +230,7 @@ def divideFeatureLabel(dataset):
 def main():
     rawDataset = loadRawData("O192-COMP7117-AS01-00-classification.csv")
     perc70 = int(0.7 * len(rawDataset))
+    perc20 = int(0.2 * len(rawDataset))
     
     datasetFeature = getFeature(rawDataset)
     # datasetFeature = normalize(datasetFeature)
@@ -187,19 +254,21 @@ def main():
     
 
     trainDatasetPCA = datasetPCA[0:perc70]
-    testDatasetPCA = datasetPCA[perc70:]
+    validateDatasetPCA = datasetPCA[perc70:(perc20 + perc70)]
+    testDatasetPCA = datasetPCA[(perc20 + perc70):]
 
     model = buildModel(x, n_input, n_hidden, n_output)
-    optimize(model,trainDatasetPCA)
+    # optimize(model,trainDatasetPCA, testDatasetPCA)
+    test(model, testDatasetPCA)
 
-    matchFeatureDataset = oldFixFeatures[0:perc70]
-    matchFeatureDataset = denormalize(matchFeatureDataset)
-    print(len(matchFeatureDataset), len(modelResultValue), len(defaultResultValue))
-    for i in range(0, len(matchFeatureDataset)):
-        ftype = "a"
-        if(i == 0):
-            ftype = "w"
-        print(matchFeatureDataset[i], modelResultValue[i], defaultResultValue[i], file=open("o.txt", ftype))
+    # matchFeatureDataset = oldFixFeatures[0:perc70]
+    # matchFeatureDataset = denormalize(matchFeatureDataset)
+    # print(len(matchFeatureDataset), len(modelResultValue), len(defaultResultValue))
+    # for i in range(0, len(matchFeatureDataset)):
+    #     ftype = "a"
+    #     if(i == 0):
+    #         ftype = "w"
+        # print(matchFeatureDataset[i], modelResultValue[i], defaultResultValue[i], file=open("o.txt", ftype))
 
 
 
