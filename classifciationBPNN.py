@@ -3,8 +3,8 @@ import numpy as np
 import csv
 import random
 from sklearn.decomposition import PCA
-#Global Variable
 
+#Global Variable
 n_input = 5
 n_output = 5
 n_hidden = [10,8]
@@ -14,7 +14,7 @@ modelResultValue = []
 defaultResultValue = []
 minFeature = []
 maxFeature = []
-save_dir = "./bpnn-model/" #. untuk cek kalo gaada folder tersebut maka akan dibikinin
+save_dir = "./bpnn-model/"
 filename = "bpnn.ckpt"
 
 x = tf.placeholder(tf.float32, [None,n_input])
@@ -124,7 +124,6 @@ def optimize(model,trainDataset, validateDataset):
     
     loss = tf.reduce_mean(0.5 * (t-model)**2)
     optimizer = tf.train.GradientDescentOptimizer(learningRate).minimize(loss)
-    # correct_prediction = tf.equal(tf.argmax(model,1), tf.argmax(t,1))
     modelResult = tf.argmax(model,1)
     defaultResult = tf.argmax(t,1)
     correct_prediction = tf.equal(modelResult, defaultResult)
@@ -233,8 +232,6 @@ def main():
     perc20 = int(0.2 * len(rawDataset))
     
     datasetFeature = getFeature(rawDataset)
-    # datasetFeature = normalize(datasetFeature)
-
     datasetLabel = getLabel(rawDataset)
     datasetLabel = convertLabelToOneHotVector(datasetLabel)
     
@@ -258,26 +255,8 @@ def main():
     testDatasetPCA = datasetPCA[(perc20 + perc70):]
 
     model = buildModel(x, n_input, n_hidden, n_output)
-    # optimize(model,trainDatasetPCA, testDatasetPCA)
+    optimize(model,trainDatasetPCA, testDatasetPCA)
     test(model, testDatasetPCA)
-
-    # matchFeatureDataset = oldFixFeatures[0:perc70]
-    # matchFeatureDataset = denormalize(matchFeatureDataset)
-    # print(len(matchFeatureDataset), len(modelResultValue), len(defaultResultValue))
-    # for i in range(0, len(matchFeatureDataset)):
-    #     ftype = "a"
-    #     if(i == 0):
-    #         ftype = "w"
-        # print(matchFeatureDataset[i], modelResultValue[i], defaultResultValue[i], file=open("o.txt", ftype))
-
-
-
-
-
-
-
-
-
 
 
 main()
